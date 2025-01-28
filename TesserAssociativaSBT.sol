@@ -72,7 +72,7 @@ contract MegoTicketsSoulbound is ERC721, Ownable {
     {
         uint256 tokenCount = balanceOf(_owner);
         if (tokenCount == 0) {
-            return (new uint256w string );
+            return (new uint256[](0), new string[](0));
    } else {
             uint256[] memory result = new uint256[](tokenCount);
             string[] memory tiers = new string[](tokenCount);
