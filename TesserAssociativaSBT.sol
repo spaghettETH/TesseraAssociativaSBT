@@ -3,20 +3,18 @@ pragma solidity ^0.8.6;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/utils/Base64.sol";
+import "./Base64.sol";
 
-contract SpaghettETHImpactAssociati is ERC721, Ownable, Pausable {
+contract MegoTicketsSoulbound is ERC721, Ownable {
     struct Ticket {
         bool exists;
         string name;
         string description;
         string image;
         uint16 numMinted;
-        uint256 validUntil; // Expiration timestamp
         address owner;
-        bool soulbound; // Indicates if the ticket is non-transferable
+        bool soulbound;
     }
 
     uint256 private _tokenIdCounter;
@@ -26,49 +24,66 @@ contract SpaghettETHImpactAssociati is ERC721, Ownable, Pausable {
     mapping(uint256 => string) public _idToSerial;
     mapping(uint256 => bool) public _burned;
     mapping(address => bool) public _proxies;
-    mapping(address => bool) public onlyOwnerAddresses; // Extended OnlyOwner permissions
+    mapping(address => bool) public _owners; // Multi-owner support
+    mapping(uint256 => uint256) public validUntil; // Stores the expiry timestamp for each token
 
-    bool public isPaused = false;
-
-    event Minted(uint256 indexed tokenId, uint256 validUntil, bool soulbound);
+    event Minted(uint256 indexed tokenId);
+    event Claimed(uint256 indexed tokenId);
     event Burned(uint256 indexed tokenId);
+    event OwnerAdded(address indexed newOwner);
+    event OwnerRemoved(address indexed removedOwner);
 
+    constructor(
+        string memory _name,
+        string memory _ticker
+    ) ERC721(_name, _ticker) {
+        _owners[msg.sender] = true; // Add the contract deployer as an initial owner
+    }
+
+    // Modifier for multiple owners
     modifier onlyOwners() {
-        require(
-            owner() == msg.sender || onlyOwnerAddresses[msg.sender],
-            "Caller is not an owner"
-        );
+        require(_owners[msg.sender], "MegoTicketsSoulbound: Caller is not an owner");
         _;
     }
 
-    constructor(string memory _name, string memory _symbol)
-        ERC721(_name, _symbol)
-        Ownable(msg.sender)
-    {}
+    // Add a new owner
+    function addOwner(address newOwner) external onlyOwners {
+        _owners[newOwner] = true;
+        emit OwnerAdded(newOwner);
+    }
+
+    // Remove an existing owner
+    function removeOwner(address owner) external onlyOwners {
+        require(owner != msg.sender, "MegoTicketsSoulbound: Cannot remove yourself");
+        _owners[owner] = false;
+        emit OwnerRemoved(owner);
+    }
 
     function totalSupply() public view returns (uint256) {
         return _tokenIdCounter;
     }
 
-    function tokensOfOwner(address _owner)
+    function tokensOfOwner(
+        address _owner
+    )
         external
         view
         returns (uint256[] memory ownerTokens, string[] memory tierTokens)
     {
         uint256 tokenCount = balanceOf(_owner);
         if (tokenCount == 0) {
-            return ([], []);
+            return (new uint256w string );
    } else {
             uint256[] memory result = new uint256[](tokenCount);
             string[] memory tiers = new string[](tokenCount);
             uint256 totalTkns = totalSupply();
             uint256 resultIndex = 0;
-            uint256 tnkId;
+            uint256 tknId;
 
-            for (tnkId = 1; tnkId <= totalTkns; tnkId++) {
-                if (!_burned[tnkId] && ownerOf(tnkId) == _owner) {
-                    result[resultIndex] = tnkId;
-                    tiers[resultIndex] = _idToTier[tnkId];
+            for (tknId = 1; tknId <= totalTkns; tknId++) {
+                if (!_burned[tknId] && ownerOf(tknId) == _owner) {
+                    result[resultIndex] = tknId;
+                    tiers[resultIndex] = _idToTier[tknId];
                     resultIndex++;
                 }
             }
@@ -89,10 +104,7 @@ contract SpaghettETHImpactAssociati is ERC721, Ownable, Pausable {
         string memory image,
         bool soulbound
     ) external {
-        require(
-            _proxies[msg.sender],
-            "Can't manage tiers."
-        );
+        require(_proxies[msg.sender], "Can't manage tiers.");
         _tickets[tier].owner = owner;
         _tickets[tier].exists = true;
         _tickets[tier].name = name;
@@ -124,32 +136,30 @@ contract SpaghettETHImpactAssociati is ERC721, Ownable, Pausable {
                         '", "attributes": [',
                         '{"trait_type": "TIER", "value": "',
                         tier,
-                        '"}, {"trait_type": "Soulbound", "value": "',
-                        ticket.soulbound ? "true" : "false",
-                        '"}, {"trait_type": "Valid Until", "value": "',
-                        Strings.toString(ticket.validUntil),
+                        '"},',
+                        '{"trait_type": "VALID_UNTIL", "value": "',
+                        Strings.toString(validUntil[id]),
                         '"}',
                         "]}"
                     )
                 )
             )
         );
-        string memory output = string(
-            abi.encodePacked("data:application/json;base64,", json)
-        );
-        return output;
+        return string(abi.encodePacked("data:application/json;base64,", json));
     }
 
     function mint(
         address receiver,
         string memory tier,
-        uint256 amount,
-        bool soulbound
+        uint256 amount
     ) external {
-        require(_proxies[msg.sender], "SpaghettETH: Only proxy can mint");
+        require(
+            _proxies[msg.sender],
+            "MegoTicketsSoulbound: Only proxy can mint"
+        );
         require(
             _tickets[tier].exists,
-            "SpaghettETH: Minting a non-existent tier"
+            "MegoTicketsSoulbound: Minting a non-existent tier"
         );
 
         Ticket storage ticket = _tickets[tier];
@@ -160,23 +170,18 @@ contract SpaghettETHImpactAssociati is ERC721, Ownable, Pausable {
             ticket.numMinted++;
             _idToSerial[tokenId] = Strings.toString(ticket.numMinted);
             _idToTier[tokenId] = tier;
-            ticket.soulbound = soulbound;
-
-            // Set validUntil as block.timestamp + 1 year
-            ticket.validUntil = block.timestamp + 365 days;
-
+            validUntil[tokenId] = block.timestamp + 365 days; // Set expiration
             _safeMint(receiver, tokenId);
-
-            emit Minted(tokenId, ticket.validUntil, soulbound);
+            emit Minted(tokenId);
         }
     }
 
     function burn(uint256 tokenId) public {
         require(
             _proxies[msg.sender] || ownerOf(tokenId) == msg.sender,
-            "SpaghettETH: Only proxy or owner can burn"
+            "MegoTicketsSoulbound: Only proxy or owner can burn"
         );
-        require(!_burned[tokenId], "SpaghettETH: Already burned");
+        require(!_burned[tokenId], "MegoTicketsSoulbound: Already burned");
         _burned[tokenId] = true;
         _idToSerial[tokenId] = "";
         _idToTier[tokenId] = "";
@@ -192,9 +197,8 @@ contract SpaghettETHImpactAssociati is ERC721, Ownable, Pausable {
         string memory tier = _idToTier[tokenId];
         require(
             !_tickets[tier].soulbound || from == address(0) || _burned[tokenId],
-            "SpaghettETH: Can't transfer soulbound ticket"
+            "MegoTicketsSoulbound: Can't transfer soulbound ticket"
         );
         super._beforeTokenTransfer(from, to, tokenId);
     }
 }
-
