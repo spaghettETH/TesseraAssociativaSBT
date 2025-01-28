@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.6;
 
-import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/utils/Base64.sol";
+import "@openzeppelin/contracts@4.5.0/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts@4.5.0/access/Ownable.sol";
+import "@openzeppelin/contracts@4.5.0/utils/Strings.sol";
+import "./Base64.sol";
+
 
 contract TesserAssociativaSBT is ERC721, Ownable {
     struct Ticket {
