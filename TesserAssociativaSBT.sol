@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/utils/Base64.sol";
 
-contract MegoTicketsSoulbound is ERC721, Ownable {
+contract TesserAssociativaSBT is ERC721, Ownable {
     struct Ticket {
         bool exists;
         string name;
